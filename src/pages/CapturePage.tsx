@@ -327,82 +327,82 @@ export function CapturePage() {
       <Toaster />
       
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Warehouse className="h-6 w-6 text-primary" />
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900">{currentToma.bodega}</h1>
-                <p className="text-sm text-gray-500">Toma de inventario • {formatDate(currentToma.fecha_inicio)}</p>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
+              <Warehouse className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{currentToma.bodega}</h1>
+                <p className="text-xs sm:text-sm text-gray-500 truncate">Toma de inventario • {formatDate(currentToma.fecha_inicio)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto overflow-x-auto">
               <select
                 value={currentRackId || ''}
                 onChange={(e) => { const id = Number(e.target.value); if (id) { setCurrentRack(id); loadCuerpos(id); } }}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 sm:flex-none border border-gray-300 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary min-w-0 max-w-[120px] sm:max-w-none"
               >
-                <option value="">Seleccionar Rack</option>
+                <option value="">Rack</option>
                 {racks.map(r => (
-                  <option key={r.id} value={r.id}>{r.nombre} ({Math.ceil(r.num_posiciones / 5)} cuerpos)</option>
+                  <option key={r.id} value={r.id}>{r.nombre}</option>
                 ))}
               </select>
-              <div className="flex items-center gap-1 border-l pl-3 border-gray-200">
-                <Button variant="ghost" size="icon" onClick={handleExportDB} title="Exportar BD">
-                  <Download className="h-4 w-4" />
+              <div className="flex items-center gap-0.5 sm:gap-1 border-l pl-2 sm:pl-3 border-gray-200">
+                <Button variant="ghost" size="icon" onClick={handleExportDB} title="Exportar BD" className="h-8 w-8 sm:h-9 sm:w-9">
+                  <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={handleImportDB} title="Importar BD">
-                  <Upload className="h-4 w-4" />
+                <Button variant="ghost" size="icon" onClick={handleImportDB} title="Importar BD" className="h-8 w-8 sm:h-9 sm:w-9">
+                  <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setShowCleanup(true)}>
-                <Trash2 className="h-4 w-4 mr-1" />
-                Limpiar
+              <Button variant="outline" size="sm" onClick={() => setShowCleanup(true)} className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
+                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                <span className="hidden sm:inline">Limpiar</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={handleShowResumen}>
-                <Eye className="h-4 w-4 mr-1" />
-                Resumen
+              <Button variant="outline" size="sm" onClick={handleShowResumen} className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3">
+                <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                <span className="hidden sm:inline">Resumen</span>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Captura - {currentRack?.nombre || 'Seleccione rack'}
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                  <Package className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
+                  <span className="truncate">Captura - {currentRack?.nombre || 'Seleccione rack'}</span>
                 </CardTitle>
                 {selectedCuerpo && (
-                  <div className="flex gap-2">
-                    <Badge variant="secondary">{selectedCuerpo.codigo}</Badge>
-                    <Badge variant="outline">{selectedCuerpo.total_posiciones} pos</Badge>
+                  <div className="flex gap-1.5 shrink-0">
+                    <Badge variant="secondary" className="text-xs">{selectedCuerpo.codigo}</Badge>
+                    <Badge variant="outline" className="text-xs">{selectedCuerpo.total_posiciones} pos</Badge>
                   </div>
                 )}
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-3 sm:p-4 space-y-3">
                 <div className="space-y-3">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Producto</label>
-                    <div className="flex gap-2">
+                    <label className="mb-1 block text-xs sm:text-sm font-medium text-gray-700">Producto</label>
+                    <div className="flex gap-1.5 sm:gap-2">
                       <div className="flex-1 relative">
                         <Input
-                          placeholder="Buscar por descripción o código"
+                          placeholder="Buscar producto..."
                           value={referenciaInput}
                           onChange={(e) => { setReferenciaInput(e.target.value.toUpperCase()); handleReferenciaSearch(e.target.value.toUpperCase()); }}
                           ref={referenciaInputRef}
                           autoComplete="off"
-                          className="pr-10"
+                          className="pr-10 text-sm h-9 sm:h-10"
                         />
                         {filteredReferencias.length > 0 && (
                           <button
                             type="button"
                             onClick={() => setShowProductDialog(true)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs bg-primary/10 text-primary px-1.5 sm:px-2 py-0.5 rounded-full font-medium"
                           >
                             {filteredReferencias.length}
                           </button>
@@ -419,16 +419,16 @@ export function CapturePage() {
                             });
                           }
                         }}
-                        className="shrink-0"
+                        className="shrink-0 h-9 sm:h-10 text-xs sm:text-sm"
                       >
                         Buscar
                       </Button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Cuerpo</label>
+                      <label className="mb-1 block text-xs sm:text-sm font-medium text-gray-700">Cuerpo</label>
                       <select
                         value={selectedCuerpo?.id || ''}
                         onChange={(e) => {
@@ -443,7 +443,7 @@ export function CapturePage() {
                             setReferenciaInput('');
                           }
                         }}
-                        className="w-full h-10 rounded-md border border-gray-300 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-9 sm:h-10 rounded-md border border-gray-300 bg-white px-1.5 sm:px-2 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                       >
                         <option value="">Cuerpo</option>
                         {cuerpos.map(c => (
@@ -455,7 +455,7 @@ export function CapturePage() {
                     </div>
                     <Input
                       label="Posiciones"
-                      placeholder="3"
+                      placeholder="0"
                       value={posicionesOcupadas}
                       onChange={(e) => {
                         const val = e.target.value.replace(/[^0-9]/g, '');
@@ -466,10 +466,11 @@ export function CapturePage() {
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
                       inputMode="numeric"
+                      className="text-sm h-9 sm:h-10"
                     />
                     <Input
-                      label="Uds por pos"
-                      placeholder="20"
+                      label="Uds/pos"
+                      placeholder="0"
                       value={unidadesPorPosicion}
                       onChange={(e) => {
                         const val = e.target.value.replace(/[^0-9]/g, '');
@@ -477,32 +478,33 @@ export function CapturePage() {
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
                       inputMode="numeric"
+                      className="text-sm h-9 sm:h-10"
                     />
                   </div>
 
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="bg-primary/5 rounded-lg px-3 py-2 min-w-[120px]">
-                      <span className="text-xs text-gray-500">Total</span>
-                      <p className="text-lg font-bold font-mono text-primary">
+                  <div className="flex flex-row items-center gap-2 flex-wrap">
+                    <div className="bg-primary/5 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 min-w-[100px] sm:min-w-[120px]">
+                      <span className="text-[10px] sm:text-xs text-gray-500">Total</span>
+                      <p className="text-base sm:text-lg font-bold font-mono text-primary">
                         {posicionesOcupadas && unidadesPorPosicion
                           ? formatNumber((parseInt(posicionesOcupadas) || 0) * (parseInt(unidadesPorPosicion) || 0))
                           : '—'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-500">Vacías:</span>
-                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setPosicionesVacias(Math.max(0, posicionesVacias - 1))} disabled={posicionesVacias <= 0}>−</Button>
-                      <span className="w-7 text-center font-mono font-bold text-sm">{posicionesVacias}</span>
-                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setPosicionesVacias(Math.min((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0), posicionesVacias + 1))} disabled={posicionesVacias >= ((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0))}>+</Button>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] sm:text-xs text-gray-500">Vacías:</span>
+                      <Button variant="outline" size="sm" className="h-6 w-6 sm:h-7 sm:w-7 p-0 text-xs" onClick={() => setPosicionesVacias(Math.max(0, posicionesVacias - 1))} disabled={posicionesVacias <= 0}>−</Button>
+                      <span className="w-6 sm:w-7 text-center font-mono font-bold text-xs sm:text-sm">{posicionesVacias}</span>
+                      <Button variant="outline" size="sm" className="h-6 w-6 sm:h-7 sm:w-7 p-0 text-xs" onClick={() => setPosicionesVacias(Math.min((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0), posicionesVacias + 1))} disabled={posicionesVacias >= ((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0))}>+</Button>
                     </div>
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      <span className="text-xs text-gray-500">Auxiliar:</span>
+                    <div className="flex items-center gap-1 sm:ml-auto">
+                      <span className="text-[10px] sm:text-xs text-gray-500">Aux:</span>
                       <select
                         value={currentUserId || ''}
                         onChange={(e) => setCurrentUser(usuarios.find(u => u.id === Number(e.target.value)) || null)}
-                        className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="h-7 sm:h-8 rounded-md border border-gray-300 bg-white px-1.5 sm:px-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary max-w-[110px] sm:max-w-none"
                       >
-                        <option value="">Seleccionar</option>
+                        <option value="">Sel.</option>
                         {getAuxiliarOptions().map(o => (
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
@@ -510,7 +512,7 @@ export function CapturePage() {
                     </div>
                   </div>
 
-                  <Button onClick={handleAddConteo} disabled={isSubmitting || !selectedCuerpo || !currentUserId} size="lg" className="w-full">
+                  <Button onClick={handleAddConteo} disabled={isSubmitting || !selectedCuerpo || !currentUserId} size="lg" className="w-full h-10 sm:h-11 text-sm sm:text-base">
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
                     Registrar Conteo
                   </Button>
@@ -541,11 +543,6 @@ export function CapturePage() {
                     </DialogContent>
                   </Dialog>
                 )}
-
-                <Button onClick={handleAddConteo} disabled={isSubmitting || !selectedCuerpo || !currentUserId} size="lg">
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                  Registrar Conteo
-                </Button>
 
                 {conteosCuerpo.length > 0 && (
                   <div className="border-t pt-4">
@@ -606,7 +603,7 @@ export function CapturePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1.5 max-h-96 overflow-y-auto">
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 gap-1 sm:gap-1.5 max-h-96 overflow-y-auto">
                   {cuerpos.map(cuerpo => {
                     const isSelected = selectedCuerpo?.id === cuerpo.id;
                     const isContado = conteoCuerpoIds.has(cuerpo.id);
@@ -614,16 +611,16 @@ export function CapturePage() {
                       <button
                         key={cuerpo.id}
                         onClick={() => { setSelectedCuerpo(cuerpo); loadConteosCuerpo(cuerpo.id); setPosicionesOcupadas(''); setUnidadesPorPosicion(''); setPosicionesVacias(0); setReferenciaInput(''); }}
-                        className={`p-2 text-xs rounded border transition-all ${
+                        className={`p-1.5 sm:p-2 text-[10px] sm:text-xs rounded border transition-all ${
                           isSelected
                             ? 'bg-primary border-primary text-white'
                             : isContado
-                              ? 'bg-success-light border-success text-success'
+                              ? 'bg-green-50 border-green-300 text-green-700'
                               : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                         }`}
                       >
-                        <div className="font-mono font-medium">{cuerpo.codigo}</div>
-                        <div className="text-xs opacity-75">{cuerpo.total_posiciones} pos</div>
+                        <div className="font-mono font-semibold">{cuerpo.codigo}</div>
+                        <div className="text-[9px] sm:text-xs opacity-75">{cuerpo.total_posiciones} pos</div>
                       </button>
                     );
                   })}
@@ -632,27 +629,27 @@ export function CapturePage() {
             </Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Auxiliar Actual
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                  <User className="h-4 w-4 sm:h-5 sm:w-5" />
+                  Auxiliar
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-500">Usuario activo</p>
-                    <p className="font-medium text-gray-900">{currentAuxiliar?.nombre || 'No seleccionado'}</p>
-                    <p className="text-xs text-gray-500">Rol: {currentAuxiliar?.rol || '-'}</p>
+              <CardContent className="p-3 sm:p-4 pt-0 sm:pt-0">
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs sm:text-sm text-gray-500">Usuario activo</p>
+                    <p className="text-sm sm:text-base font-medium text-gray-900">{currentAuxiliar?.nombre || 'No seleccionado'}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500">Rol: {currentAuxiliar?.rol || '-'}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="p-2 bg-gray-50 rounded">
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                    <div className="p-1.5 sm:p-2 bg-gray-50 rounded">
                       <p className="text-gray-500">Rack</p>
                       <p className="font-medium">{currentRack?.nombre || '-'}</p>
                     </div>
-                    <div className="p-2 bg-gray-50 rounded">
+                    <div className="p-1.5 sm:p-2 bg-gray-50 rounded">
                       <p className="text-gray-500">Cuerpo</p>
                       <p className="font-medium">{selectedCuerpo?.codigo || '-'}</p>
                     </div>
@@ -662,14 +659,14 @@ export function CapturePage() {
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                  <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
                   Avance por Rack
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="p-3 sm:p-4 pt-0 sm:pt-0">
+                <div className="space-y-2 sm:space-y-3">
                   {racks.map(rack => {
                     const avance = useInventoryStore.getState().avanceRacks.find(a => a.rack_id === rack.id);
                     const pct = avance?.porcentaje || 0;
@@ -677,11 +674,11 @@ export function CapturePage() {
                     const ct = avance?.posiciones_contadas || 0;
                     return (
                       <div key={rack.id}>
-                        <div className="flex justify-between text-sm mb-1">
+                        <div className="flex justify-between text-xs sm:text-sm mb-1">
                           <span className="font-medium">{rack.nombre}</span>
-                          <span className="text-gray-500">{ct} / {tc} ({pct}%)</span>
+                          <span className="text-gray-500">{ct}/{tc} ({pct}%)</span>
                         </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div className="h-full bg-primary transition-all duration-300" style={{ width: `${Math.min(pct, 100)}%` }} />
                         </div>
                       </div>
@@ -692,29 +689,29 @@ export function CapturePage() {
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                  <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
                   Actividad Reciente
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+              <CardContent className="p-3 sm:p-4 pt-0 sm:pt-0">
+                <div className="space-y-1.5 sm:space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
                   {conteos.slice(0, 10).map(c => (
-                    <div key={c.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                      <div className="flex justify-between text-xs">
-                        <span className="font-mono text-primary">{c.referencia}</span>
+                    <div key={c.id} className="p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="flex justify-between text-[10px] sm:text-xs">
+                        <span className="font-mono text-primary font-medium">{c.referencia}</span>
                         <span className="text-gray-500">{formatDate(c.fecha_hora)}</span>
                       </div>
-                      <div className="flex justify-between text-xs mt-1">
+                      <div className="flex justify-between text-[10px] sm:text-xs mt-0.5 sm:mt-1">
                         <span className="text-gray-600">{c.posicion_codigo}</span>
                         <span className="font-medium">{formatNumber(c.cantidad)}{c.formula_text ? ` (${c.formula_text})` : ''}</span>
                       </div>
-                      <div className="text-xs text-gray-400">{c.auxiliar_nombre}</div>
+                      <div className="text-[9px] sm:text-xs text-gray-400">{c.auxiliar_nombre}</div>
                     </div>
                   ))}
                   {conteos.length === 0 && (
-                    <p className="text-center text-gray-500 py-4">No hay conteos registrados</p>
+                    <p className="text-center text-gray-500 py-3 sm:py-4 text-xs sm:text-sm">No hay conteos registrados</p>
                   )}
                 </div>
               </CardContent>
