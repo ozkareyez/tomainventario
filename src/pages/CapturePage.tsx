@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Warehouse, Plus, Eye, Trash2, 
+  Warehouse, Plus, Eye, Trash2, Upload, Download,
   Loader2, Filter, User, Clock, Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/Dialog';
 import { Toaster } from '@/components/ui/Toaster';
 import { useInventoryStore } from '@/store/inventoryStore';
-import { initDatabase } from '@/db/database';
+import { initDatabase, exportDatabase, importDatabase } from '@/db/database';
 import { 
   TomaInventarioRepo, RackRepo, CuerpoRepo, ReferenciaCatalogoRepo, 
   UsuarioRepo, ConteoLineaRepo, InventarioRepo, ExcelRepo
@@ -40,7 +40,7 @@ export function CapturePage() {
   const [unidadesPorPosicion, setUnidadesPorPosicion] = useState('');
   const [posicionesVacias, setPosicionesVacias] = useState(0);
   const [referenciaInput, setReferenciaInput] = useState('');
-  const [showReferenciaSearch, setShowReferenciaSearch] = useState(false);
+  const [showProductDialog, setShowProductDialog] = useState(false);
   const [filteredReferencias, setFilteredReferencias] = useState<ReferenciaCatalogo[]>([]);
   const [cuerpos, setCuerpos] = useState<Cuerpo[]>([]);
   const [selectedCuerpo, setSelectedCuerpo] = useState<Cuerpo | null>(null);
@@ -152,16 +152,16 @@ export function CapturePage() {
       if (query.length >= 1 && currentTomaId) {
         const results = await ReferenciaCatalogoRepo.searchByDescription(currentTomaId, query);
         setFilteredReferencias(results);
-        setShowReferenciaSearch(true);
+        setShowProductDialog(results.length > 0);
       } else {
-        setShowReferenciaSearch(false);
+        setShowProductDialog(false);
       }
     }, 150);
   }, [currentTomaId, setSearchQuery]);
 
   const handleReferenciaSelect = (ref: ReferenciaCatalogo) => {
     setReferenciaInput(ref.referencia);
-    setShowReferenciaSearch(false);
+    setShowProductDialog(false);
     setPosicionesOcupadas('');
     setUnidadesPorPosicion('');
     setPosicionesVacias(0);
@@ -263,6 +263,33 @@ export function CapturePage() {
     setShowResumen(true);
   };
 
+  const handleExportDB = async () => {
+    const data = await exportDatabase();
+    const blob = new Blob([data.buffer as ArrayBuffer], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventario_${new Date().toISOString().split('T')[0]}.db`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Exportado', description: 'Base de datos descargada', variant: 'success' });
+  };
+
+  const handleImportDB = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.db';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const buffer = await file.arrayBuffer();
+      await importDatabase(new Uint8Array(buffer));
+      toast({ title: 'Importado', description: 'Base de datos cargada, recargando...', variant: 'success' });
+      setTimeout(() => window.location.reload(), 1000);
+    };
+    input.click();
+  };
+
   const handleCleanupPreview = async () => {
     if (!currentTomaId || !cleanupPattern.trim()) return;
     const refs = catalogo.filter(r => r.referencia.includes(cleanupPattern.replace(/%/g, '')));
@@ -320,6 +347,14 @@ export function CapturePage() {
                   <option key={r.id} value={r.id}>{r.nombre} ({Math.ceil(r.num_posiciones / 5)} cuerpos)</option>
                 ))}
               </select>
+              <div className="flex items-center gap-1 border-l pl-3 border-gray-200">
+                <Button variant="ghost" size="icon" onClick={handleExportDB} title="Exportar BD">
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={handleImportDB} title="Importar BD">
+                  <Upload className="h-4 w-4" />
+                </Button>
+              </div>
               <Button variant="outline" size="sm" onClick={() => setShowCleanup(true)}>
                 <Trash2 className="h-4 w-4 mr-1" />
                 Limpiar
@@ -350,112 +385,161 @@ export function CapturePage() {
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <Input
-                    label="Producto"
-                    placeholder="Buscar por descripción o código"
-                    value={referenciaInput}
-                    onChange={(e) => { setReferenciaInput(e.target.value.toUpperCase()); handleReferenciaSearch(e.target.value.toUpperCase()); }}
-                    ref={referenciaInputRef}
-                    autoComplete="off"
-                  />
+                <div className="space-y-3">
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Cuerpo</label>
-                    <select
-                      value={selectedCuerpo?.id || ''}
-                      onChange={(e) => {
-                        const id = Number(e.target.value);
-                        const cuerpo = cuerpos.find(c => c.id === id);
-                        if (cuerpo) {
-                          setSelectedCuerpo(cuerpo);
-                          loadConteosCuerpo(cuerpo.id);
-                          setPosicionesOcupadas('');
-                          setUnidadesPorPosicion('');
-                          setPosicionesVacias(0);
-                          setReferenciaInput('');
-                        }
-                      }}
-                      className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="">Seleccionar cuerpo</option>
-                      {cuerpos.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.codigo} ({c.total_posiciones} pos)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Input
-                    label="Posiciones ocupadas"
-                    placeholder="Ej: 3"
-                    value={posicionesOcupadas}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, '');
-                      setPosicionesOcupadas(val);
-                      const n = parseInt(val) || 0;
-                      const total = selectedCuerpo?.total_posiciones || 5;
-                      setPosicionesVacias(Math.max(0, total - n));
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
-                    inputMode="numeric"
-                  />
-                  <Input
-                    label="Unidades por posición"
-                    placeholder="Bultos, cajas, etc. Ej: 20"
-                    value={unidadesPorPosicion}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, '');
-                      setUnidadesPorPosicion(val);
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
-                    inputMode="numeric"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                      Total: {posicionesOcupadas && unidadesPorPosicion ? `${posicionesOcupadas} × ${unidadesPorPosicion} = ${(parseInt(posicionesOcupadas) || 0) * (parseInt(unidadesPorPosicion) || 0)}` : '—'}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-500 mr-1">Vacías:</label>
-                      <Button variant="outline" size="sm" onClick={() => setPosicionesVacias(Math.max(0, posicionesVacias - 1))} disabled={posicionesVacias <= 0}>-</Button>
-                      <span className="w-8 text-center font-mono text-base font-bold">{posicionesVacias}</span>
-                      <Button variant="outline" size="sm" onClick={() => setPosicionesVacias(Math.min((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0), posicionesVacias + 1))} disabled={posicionesVacias >= ((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0))}>+</Button>
-                      <span className="text-xs text-gray-400 ml-1">
-                        de {selectedCuerpo?.total_posiciones || 5} posiciones
-                      </span>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Producto</label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <Input
+                          placeholder="Buscar por descripción o código"
+                          value={referenciaInput}
+                          onChange={(e) => { setReferenciaInput(e.target.value.toUpperCase()); handleReferenciaSearch(e.target.value.toUpperCase()); }}
+                          ref={referenciaInputRef}
+                          autoComplete="off"
+                          className="pr-10"
+                        />
+                        {filteredReferencias.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowProductDialog(true)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium"
+                          >
+                            {filteredReferencias.length}
+                          </button>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (referenciaInput.length >= 1 && currentTomaId) {
+                            ReferenciaCatalogoRepo.searchByDescription(currentTomaId, referenciaInput).then(r => {
+                              setFilteredReferencias(r);
+                              setShowProductDialog(r.length > 0);
+                            });
+                          }
+                        }}
+                        className="shrink-0"
+                      >
+                        Buscar
+                      </Button>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Auxiliar</label>
-                    <select
-                      value={currentUserId || ''}
-                      onChange={(e) => setCurrentUser(usuarios.find(u => u.id === Number(e.target.value)) || null)}
-                      className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="">Seleccionar auxiliar</option>
-                      {getAuxiliarOptions().map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Cuerpo</label>
+                      <select
+                        value={selectedCuerpo?.id || ''}
+                        onChange={(e) => {
+                          const id = Number(e.target.value);
+                          const cuerpo = cuerpos.find(c => c.id === id);
+                          if (cuerpo) {
+                            setSelectedCuerpo(cuerpo);
+                            loadConteosCuerpo(cuerpo.id);
+                            setPosicionesOcupadas('');
+                            setUnidadesPorPosicion('');
+                            setPosicionesVacias(0);
+                            setReferenciaInput('');
+                          }
+                        }}
+                        className="w-full h-10 rounded-md border border-gray-300 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Cuerpo</option>
+                        {cuerpos.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.codigo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Input
+                      label="Posiciones"
+                      placeholder="3"
+                      value={posicionesOcupadas}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setPosicionesOcupadas(val);
+                        const n = parseInt(val) || 0;
+                        const total = selectedCuerpo?.total_posiciones || 5;
+                        setPosicionesVacias(Math.max(0, total - n));
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
+                      inputMode="numeric"
+                    />
+                    <Input
+                      label="Uds por pos"
+                      placeholder="20"
+                      value={unidadesPorPosicion}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setUnidadesPorPosicion(val);
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
+                      inputMode="numeric"
+                    />
                   </div>
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="bg-primary/5 rounded-lg px-3 py-2 min-w-[120px]">
+                      <span className="text-xs text-gray-500">Total</span>
+                      <p className="text-lg font-bold font-mono text-primary">
+                        {posicionesOcupadas && unidadesPorPosicion
+                          ? formatNumber((parseInt(posicionesOcupadas) || 0) * (parseInt(unidadesPorPosicion) || 0))
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-gray-500">Vacías:</span>
+                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setPosicionesVacias(Math.max(0, posicionesVacias - 1))} disabled={posicionesVacias <= 0}>−</Button>
+                      <span className="w-7 text-center font-mono font-bold text-sm">{posicionesVacias}</span>
+                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setPosicionesVacias(Math.min((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0), posicionesVacias + 1))} disabled={posicionesVacias >= ((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0))}>+</Button>
+                    </div>
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <span className="text-xs text-gray-500">Auxiliar:</span>
+                      <select
+                        value={currentUserId || ''}
+                        onChange={(e) => setCurrentUser(usuarios.find(u => u.id === Number(e.target.value)) || null)}
+                        className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Seleccionar</option>
+                        {getAuxiliarOptions().map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <Button onClick={handleAddConteo} disabled={isSubmitting || !selectedCuerpo || !currentUserId} size="lg" className="w-full">
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                    Registrar Conteo
+                  </Button>
                 </div>
 
-                {showReferenciaSearch && filteredReferencias.length > 0 && (
-                  <div className="absolute z-10 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto w-full md:w-96">
-                    {filteredReferencias.slice(0, 20).map(ref => (
-                      <button key={ref.id} onClick={() => handleReferenciaSelect(ref)}
-                        className="w-full px-3 py-2 text-left hover:bg-gray-100 text-sm border-b last:border-0 flex flex-col items-start gap-1"
-                      >
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="font-mono text-primary text-sm">{ref.referencia}</span>
-                          <span className="text-xs text-gray-400">{ref.existencia_sistema} {ref.unidad_medida}</span>
-                        </div>
-                        <span className="text-gray-700 truncate w-full font-medium">{ref.descripcion}</span>
-                      </button>
-                    ))}
-                  </div>
+                {showProductDialog && filteredReferencias.length > 0 && (
+                  <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
+                    <DialogContent className="max-w-lg max-h-[60vh]">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Package className="h-5 w-5" />
+                          Productos encontrados
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="overflow-y-auto max-h-[45vh] space-y-1">
+                        {filteredReferencias.slice(0, 50).map(ref => (
+                          <button key={ref.id} onClick={() => handleReferenciaSelect(ref)}
+                            className="w-full px-4 py-3 text-left hover:bg-gray-100 rounded-lg border border-gray-100 flex flex-col items-start gap-1 transition-colors"
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <span className="font-mono text-primary font-semibold text-sm">{ref.referencia}</span>
+                              <span className="text-xs text-gray-400 ml-auto">{formatNumber(ref.existencia_sistema)} {ref.unidad_medida}</span>
+                            </div>
+                            <span className="text-gray-700 text-sm">{ref.descripcion}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 )}
 
                 <Button onClick={handleAddConteo} disabled={isSubmitting || !selectedCuerpo || !currentUserId} size="lg">
