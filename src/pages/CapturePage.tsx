@@ -152,9 +152,8 @@ export function CapturePage() {
       if (query.length >= 1 && currentTomaId) {
         const results = await ReferenciaCatalogoRepo.searchByDescription(currentTomaId, query);
         setFilteredReferencias(results);
-        setShowProductDialog(results.length > 0);
       } else {
-        setShowProductDialog(false);
+        setFilteredReferencias([]);
       }
     }, 150);
   }, [currentTomaId, setSearchQuery]);
@@ -402,7 +401,7 @@ export function CapturePage() {
                           <button
                             type="button"
                             onClick={() => setShowProductDialog(true)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs bg-primary/10 text-primary px-1.5 sm:px-2 py-0.5 rounded-full font-medium"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs bg-primary/10 text-primary px-1.5 sm:px-2 py-0.5 rounded-full font-medium hover:bg-primary/20 transition-colors"
                           >
                             {filteredReferencias.length}
                           </button>
@@ -424,6 +423,26 @@ export function CapturePage() {
                         Buscar
                       </Button>
                     </div>
+                    {filteredReferencias.length > 0 && !showProductDialog && (
+                      <div className="mt-1 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto bg-white shadow-sm">
+                        {filteredReferencias.slice(0, 10).map(ref => (
+                          <button key={ref.id} onClick={() => handleReferenciaSelect(ref)}
+                            className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                          >
+                            <span className="font-mono text-primary font-semibold text-xs shrink-0">{ref.referencia}</span>
+                            <span className="text-xs text-gray-500 truncate flex-1">{ref.descripcion}</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{formatNumber(ref.existencia_sistema)} {ref.unidad_medida}</span>
+                          </button>
+                        ))}
+                        {filteredReferencias.length > 10 && (
+                          <button onClick={() => setShowProductDialog(true)}
+                            className="w-full px-3 py-2 text-left text-xs text-primary font-medium hover:bg-gray-50 transition-colors"
+                          >
+                            Ver más ({filteredReferencias.length - 10} más)
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
