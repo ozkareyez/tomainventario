@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Warehouse, Plus, Eye, Trash2, Upload, Download,
-  Loader2, Filter, User, Clock, Package
+  Loader2, Filter, User, Clock, Package, Save, X, Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -52,6 +52,17 @@ export function CapturePage() {
   const [showCleanup, setShowCleanup] = useState(false);
   const [cleanupPattern, setCleanupPattern] = useState('');
   const [cleanupPreview, setCleanupPreview] = useState<ReferenciaCatalogo[]>([]);
+  const [pendingConteos, setPendingConteos] = useState<{
+    tempId: number;
+    referencia: string;
+    descripcion?: string;
+    posicionesOcupadas: number;
+    unidadesPorPosicion: number;
+    total: number;
+    formulaText: string;
+  }[]>([]);
+  const [pendingNextId, setPendingNextId] = useState(0);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const referenciaInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -146,12 +157,14 @@ export function CapturePage() {
 
   const handleReferenciaSearch = useCallback((query: string) => {
     setSearchQuery(query);
+    setHighlightedIndex(-1);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     
     searchDebounceRef.current = setTimeout(async () => {
       if (query.length >= 1 && currentTomaId) {
         const results = await ReferenciaCatalogoRepo.searchByDescription(currentTomaId, query);
         setFilteredReferencias(results);
+        setShowProductDialog(false);
       } else {
         setFilteredReferencias([]);
       }
@@ -166,7 +179,7 @@ export function CapturePage() {
     setPosicionesVacias(0);
   };
 
-  const handleAddConteo = async () => {
+  const handleAddPending = () => {
     if (!currentTomaId || !currentUserId || !selectedCuerpo || !referenciaInput.trim() || !posicionesOcupadas || !unidadesPorPosicion) {
       toast({ title: 'Datos incompletos', description: 'Complete todos los campos', variant: 'destructive' });
       return;
@@ -179,51 +192,71 @@ export function CapturePage() {
       return;
     }
 
-    const total = ocupadas * porPosicion;
-    if (ocupadas + posicionesVacias > (selectedCuerpo?.total_posiciones || 5)) {
+    const totalOcupadasCuerpo =
+      conteosCuerpo.reduce((s, c) => s + c.posiciones_ocupadas, 0) +
+      pendingConteos.reduce((s, c) => s + c.posicionesOcupadas, 0) +
+      ocupadas;
+
+    if (totalOcupadasCuerpo > (selectedCuerpo?.total_posiciones || 10)) {
       toast({
         title: 'Posiciones excedidas',
-        description: `El cuerpo ${selectedCuerpo.codigo} tiene ${selectedCuerpo.total_posiciones} posiciones (${ocupadas} ocupadas + ${posicionesVacias} vacías)`,
+        description: `El cuerpo ${selectedCuerpo.codigo} tiene ${selectedCuerpo.total_posiciones} posiciones (${totalOcupadasCuerpo - ocupadas} ocupadas + ${ocupadas} nuevas excede el límite)`,
         variant: 'destructive'
       });
       return;
     }
 
-    const refExists = catalogo.find(c => c.referencia === referenciaInput.trim());
+    const ref = catalogo.find(c => c.referencia === referenciaInput.trim());
 
+    setPendingConteos(prev => [...prev, {
+      tempId: pendingNextId,
+      referencia: referenciaInput.trim().toUpperCase(),
+      descripcion: ref?.descripcion,
+      posicionesOcupadas: ocupadas,
+      unidadesPorPosicion: porPosicion,
+      total: ocupadas * porPosicion,
+      formulaText: `${ocupadas}*${porPosicion}`,
+    }]);
+    setPendingNextId(prev => prev + 1);
+
+    setPosicionesOcupadas('');
+    setUnidadesPorPosicion('');
+    setPosicionesVacias(0);
+    setReferenciaInput('');
+    setFilteredReferencias([]);
+    setTimeout(() => referenciaInputRef.current?.focus(), 100);
+  };
+
+  const handleSaveAll = async () => {
+    if (!currentTomaId || !currentUserId || !selectedCuerpo || pendingConteos.length === 0) return;
     setIsSubmitting(true);
     try {
-      const formulaText = `${ocupadas}*${porPosicion}`;
+      const totalPosiciones = selectedCuerpo.total_posiciones;
+      const savedOcupadas = conteosCuerpo.reduce((s, c) => s + c.posiciones_ocupadas, 0);
+      let runningOcupadas = savedOcupadas;
 
-      await ConteoLineaRepo.create(
-        currentTomaId,
-        0,
-        referenciaInput.trim().toUpperCase(),
-        total,
-        currentUserId,
-        'app',
-        selectedCuerpo.id,
-        ocupadas,
-        posicionesVacias,
-        formulaText
-      );
-      
+      for (const pend of pendingConteos) {
+        runningOcupadas += pend.posicionesOcupadas;
+        const vacias = Math.max(0, totalPosiciones - runningOcupadas);
+        await ConteoLineaRepo.create(
+          currentTomaId, 0, pend.referencia, pend.total,
+          currentUserId, 'app', selectedCuerpo.id,
+          pend.posicionesOcupadas, vacias, pend.formulaText
+        );
+      }
+
       await loadConteosCuerpo(selectedCuerpo.id);
       await loadAvanceRacks();
       const allConteos = await ConteoLineaRepo.getByTomaInventario(currentTomaId);
       useInventoryStore.getState().setConteos(allConteos);
-      
+
       toast({
         title: 'Guardado',
-        description: `${refExists?.descripcion || referenciaInput.trim()} - ${formatNumber(total)} (${ocupadas} pos × ${porPosicion} uds)`,
+        description: `${pendingConteos.length} líneas guardadas en ${selectedCuerpo.codigo}`,
         variant: 'success'
       });
-      
-      setPosicionesOcupadas('');
-      setUnidadesPorPosicion('');
-      setPosicionesVacias(0);
-      setReferenciaInput('');
-      setFilteredReferencias([]);
+
+      setPendingConteos([]);
 
       const currentIndex = cuerpos.findIndex(c => c.id === selectedCuerpo?.id);
       if (currentIndex < cuerpos.length - 1) {
@@ -231,13 +264,70 @@ export function CapturePage() {
         setSelectedCuerpo(next);
         await loadConteosCuerpo(next.id);
       }
-      
+
       setTimeout(() => referenciaInputRef.current?.focus(), 100);
     } catch (error) {
-      console.error('Error saving count:', error);
-      toast({ title: 'Error', description: 'No se pudo guardar el conteo', variant: 'destructive' });
+      console.error('Error saving batch:', error);
+      toast({ title: 'Error', description: 'No se pudieron guardar los conteos', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRemovePending = (tempId: number) => {
+    setPendingConteos(prev => prev.filter(p => p.tempId !== tempId));
+  };
+
+  const [isScanning, setIsScanning] = useState(false);
+  const scanningRef = useRef(false);
+  const scanRef = useRef<HTMLVideoElement>(null);
+  const scanStreamRef = useRef<MediaStream | null>(null);
+
+  const stopScan = () => {
+    scanningRef.current = false;
+    if (scanStreamRef.current) {
+      scanStreamRef.current.getTracks().forEach(t => t.stop());
+      scanStreamRef.current = null;
+    }
+    setIsScanning(false);
+  };
+
+  const handleScanBarcode = async () => {
+    if (!currentTomaId) return;
+    if (isScanning) { stopScan(); return; }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      scanStreamRef.current = stream;
+      scanningRef.current = true;
+      setIsScanning(true);
+
+      const detectLoop = async () => {
+        if (!scanningRef.current) return;
+        try {
+          const detector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] });
+          const video = scanRef.current;
+          if (!video || !video.videoWidth) { setTimeout(detectLoop, 500); return; }
+          const barcodes = await detector.detect(video);
+          for (const b of barcodes) {
+            if (b.rawValue) {
+              stopScan();
+              const ref = await ReferenciaCatalogoRepo.searchByCodBarras(currentTomaId, b.rawValue);
+              if (ref) {
+                handleReferenciaSelect(ref);
+                toast({ title: 'Escaneado', description: `${ref.referencia} - ${ref.descripcion}`, variant: 'success' });
+              } else {
+                toast({ title: 'No encontrado', description: `Código ${b.rawValue} no está en el catálogo`, variant: 'destructive' });
+              }
+              return;
+            }
+          }
+          setTimeout(detectLoop, 500);
+        } catch { setTimeout(detectLoop, 500); }
+      };
+      detectLoop();
+    } catch {
+      toast({ title: 'Error de cámara', description: 'No se pudo acceder a la cámara', variant: 'destructive' });
     }
   };
 
@@ -393,6 +483,23 @@ export function CapturePage() {
                           placeholder="Buscar producto..."
                           value={referenciaInput}
                           onChange={(e) => { setReferenciaInput(e.target.value.toUpperCase()); handleReferenciaSearch(e.target.value.toUpperCase()); }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              if (filteredReferencias.length > 0) {
+                                setHighlightedIndex(prev => Math.min(prev + 1, filteredReferencias.length - 1));
+                              }
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setHighlightedIndex(prev => Math.max(prev - 1, 0));
+                            } else if (e.key === 'Enter' && highlightedIndex >= 0 && filteredReferencias[highlightedIndex]) {
+                              e.preventDefault();
+                              handleReferenciaSelect(filteredReferencias[highlightedIndex]);
+                            } else if (e.key === 'Escape') {
+                              setFilteredReferencias([]);
+                              setHighlightedIndex(-1);
+                            }
+                          }}
                           ref={referenciaInputRef}
                           autoComplete="off"
                           className="pr-10 text-sm h-9 sm:h-10"
@@ -422,28 +529,58 @@ export function CapturePage() {
                       >
                         Buscar
                       </Button>
+                      <Button
+                        variant={isScanning ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={handleScanBarcode}
+                        title="Escanear código de barras"
+                        className="shrink-0 h-9 sm:h-10 text-xs sm:text-sm"
+                      >
+                        {isScanning ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                      </Button>
                     </div>
                     {filteredReferencias.length > 0 && !showProductDialog && (
-                      <div className="mt-1 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto bg-white shadow-sm">
-                        {filteredReferencias.slice(0, 10).map(ref => (
-                          <button key={ref.id} onClick={() => handleReferenciaSelect(ref)}
-                            className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                      <div className="mt-1 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto bg-white shadow-sm">
+                        {filteredReferencias.slice(0, 20).map((ref, i) => (
+                          <button
+                            key={ref.id}
+                            ref={i === highlightedIndex ? (el) => el?.scrollIntoView?.({ block: 'nearest' }) : undefined}
+                            onClick={() => handleReferenciaSelect(ref)}
+                            onMouseEnter={() => setHighlightedIndex(i)}
+                            className={`w-full px-3 py-2 text-left flex items-center gap-2 transition-colors ${
+                              i === highlightedIndex ? 'bg-primary/10' : 'hover:bg-gray-50'
+                            }`}
                           >
                             <span className="font-mono text-primary font-semibold text-xs shrink-0">{ref.referencia}</span>
                             <span className="text-xs text-gray-500 truncate flex-1">{ref.descripcion}</span>
                             <span className="text-[10px] text-gray-400 shrink-0">{formatNumber(ref.existencia_sistema)} {ref.unidad_medida}</span>
                           </button>
                         ))}
-                        {filteredReferencias.length > 10 && (
+                        {filteredReferencias.length > 20 && (
                           <button onClick={() => setShowProductDialog(true)}
                             className="w-full px-3 py-2 text-left text-xs text-primary font-medium hover:bg-gray-50 transition-colors"
                           >
-                            Ver más ({filteredReferencias.length - 10} más)
+                            Ver más ({filteredReferencias.length - 20} más)
                           </button>
                         )}
                       </div>
                     )}
                   </div>
+
+                  {isScanning && (
+                    <div className="relative rounded-lg overflow-hidden border border-primary bg-black">
+                      <video ref={scanRef} autoPlay playsInline muted className="w-full h-32 sm:h-40 object-cover" />
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-3/4 h-1/2 border-2 border-primary rounded-lg opacity-60" />
+                      </div>
+                      <button onClick={stopScan} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1">
+                        <X className="h-4 w-4" />
+                      </button>
+                      <p className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-white bg-black/50 px-2 py-0.5 rounded">
+                        Escaneando...
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                     <div>
@@ -480,10 +617,10 @@ export function CapturePage() {
                         const val = e.target.value.replace(/[^0-9]/g, '');
                         setPosicionesOcupadas(val);
                         const n = parseInt(val) || 0;
-                        const total = selectedCuerpo?.total_posiciones || 5;
+                        const total = selectedCuerpo?.total_posiciones || 10;
                         setPosicionesVacias(Math.max(0, total - n));
                       }}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddPending()}
                       inputMode="numeric"
                       className="text-sm h-9 sm:h-10"
                     />
@@ -495,7 +632,7 @@ export function CapturePage() {
                         const val = e.target.value.replace(/[^0-9]/g, '');
                         setUnidadesPorPosicion(val);
                       }}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddConteo()}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddPending()}
                       inputMode="numeric"
                       className="text-sm h-9 sm:h-10"
                     />
@@ -514,7 +651,7 @@ export function CapturePage() {
                       <span className="text-[10px] sm:text-xs text-gray-500">Vacías:</span>
                       <Button variant="outline" size="sm" className="h-6 w-6 sm:h-7 sm:w-7 p-0 text-xs" onClick={() => setPosicionesVacias(Math.max(0, posicionesVacias - 1))} disabled={posicionesVacias <= 0}>−</Button>
                       <span className="w-6 sm:w-7 text-center font-mono font-bold text-xs sm:text-sm">{posicionesVacias}</span>
-                      <Button variant="outline" size="sm" className="h-6 w-6 sm:h-7 sm:w-7 p-0 text-xs" onClick={() => setPosicionesVacias(Math.min((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0), posicionesVacias + 1))} disabled={posicionesVacias >= ((selectedCuerpo?.total_posiciones || 5) - (parseInt(posicionesOcupadas) || 0))}>+</Button>
+                      <Button variant="outline" size="sm" className="h-6 w-6 sm:h-7 sm:w-7 p-0 text-xs" onClick={() => setPosicionesVacias(Math.min((selectedCuerpo?.total_posiciones || 10) - (parseInt(posicionesOcupadas) || 0), posicionesVacias + 1))} disabled={posicionesVacias >= ((selectedCuerpo?.total_posiciones || 10) - (parseInt(posicionesOcupadas) || 0))}>+</Button>
                     </div>
                     <div className="flex items-center gap-1 sm:ml-auto">
                       <span className="text-[10px] sm:text-xs text-gray-500">Aux:</span>
@@ -531,11 +668,41 @@ export function CapturePage() {
                     </div>
                   </div>
 
-                  <Button onClick={handleAddConteo} disabled={isSubmitting || !selectedCuerpo || !currentUserId} size="lg" className="w-full h-10 sm:h-11 text-sm sm:text-base">
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                    Registrar Conteo
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={handleAddPending} disabled={!selectedCuerpo || !currentUserId} size="lg" className="flex-1 h-10 sm:h-11 text-sm sm:text-base">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar
+                    </Button>
+                    {pendingConteos.length > 0 && (
+                      <Button onClick={handleSaveAll} disabled={isSubmitting} size="lg" className="flex-1 h-10 sm:h-11 text-sm sm:text-base bg-green-600 hover:bg-green-700 text-white">
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                        Guardar todo ({pendingConteos.length})
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {pendingConteos.length > 0 && (
+                  <div className="border rounded-lg divide-y divide-gray-100">
+                    <div className="px-3 py-2 bg-amber-50 rounded-t-lg flex items-center justify-between">
+                      <span className="text-xs sm:text-sm font-medium text-amber-800">
+                        Pendientes ({pendingConteos.length}) — ocupadas {pendingConteos.reduce((s, c) => s + c.posicionesOcupadas, 0)} / {selectedCuerpo?.total_posiciones || 10} pos
+                      </span>
+                    </div>
+                    {pendingConteos.map(p => (
+                      <div key={p.tempId} className="px-3 py-2 flex items-center gap-2 text-xs sm:text-sm hover:bg-gray-50">
+                        <button onClick={() => handleRemovePending(p.tempId)} className="text-gray-400 hover:text-danger transition-colors shrink-0">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="font-mono text-primary font-semibold shrink-0">{p.referencia}</span>
+                        <span className="text-gray-500 truncate flex-1">{p.descripcion || ''}</span>
+                        <span className="text-gray-600 shrink-0">{p.posicionesOcupadas} pos</span>
+                        <span className="text-gray-400 shrink-0">× {p.unidadesPorPosicion} uds</span>
+                        <span className="font-mono font-medium text-gray-900 shrink-0">= {formatNumber(p.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {showProductDialog && filteredReferencias.length > 0 && (
                   <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
@@ -689,7 +856,7 @@ export function CapturePage() {
                   {racks.map(rack => {
                     const avance = useInventoryStore.getState().avanceRacks.find(a => a.rack_id === rack.id);
                     const pct = avance?.porcentaje || 0;
-                    const tc = Math.ceil(rack.num_posiciones / 5);
+                    const tc = Math.ceil(rack.num_posiciones / 10);
                     const ct = avance?.posiciones_contadas || 0;
                     return (
                       <div key={rack.id}>

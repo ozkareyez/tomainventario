@@ -128,7 +128,7 @@ export const RackRepo = {
       if (!existingCodes.has(codigo)) {
         queries.push({
           sql: `INSERT INTO cuerpo (rack_id, codigo, orden, total_posiciones) VALUES (?, ?, ?, ?)`,
-          params: [rackId, codigo, i, 5],
+          params: [rackId, codigo, i, 10],
         });
       }
     }
@@ -142,7 +142,7 @@ export const RackRepo = {
   async generateAllCuerpos(tomaInventarioId: number): Promise<void> {
     const racks = await this.getByTomaInventario(tomaInventarioId);
     for (const rack of racks) {
-      const numCuerpos = Math.ceil(rack.num_posiciones / 5);
+      const numCuerpos = Math.ceil(rack.num_posiciones / 10);
       await this.generateCuerpos(rack.id, numCuerpos);
     }
   },
@@ -200,9 +200,9 @@ export const CuerpoRepo = {
 export const ReferenciaCatalogoRepo = {
   async create(tomaInventarioId: number, data: Omit<ReferenciaCatalogo, 'id' | 'toma_inventario_id' | 'created_at'>): Promise<number> {
     const result = executeRun(
-      `INSERT INTO referencia_catalogo (toma_inventario_id, referencia, descripcion, unidad_medida, sublinea, existencia_sistema)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [tomaInventarioId, data.referencia, data.descripcion, data.unidad_medida, data.sublinea, data.existencia_sistema]
+      `INSERT INTO referencia_catalogo (toma_inventario_id, referencia, descripcion, unidad_medida, sublinea, existencia_sistema, cod_barras)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [tomaInventarioId, data.referencia, data.descripcion, data.unidad_medida, data.sublinea, data.existencia_sistema, data.cod_barras || null]
     );
     await persistDatabase();
     return result.lastInsertRowid;
@@ -210,9 +210,9 @@ export const ReferenciaCatalogoRepo = {
 
   async bulkCreate(tomaInventarioId: number, items: Omit<ReferenciaCatalogo, 'id' | 'toma_inventario_id' | 'created_at'>[]): Promise<{ success: number; errors: string[] }> {
     const queries = items.map((item) => ({
-      sql: `INSERT OR IGNORE INTO referencia_catalogo (toma_inventario_id, referencia, descripcion, unidad_medida, sublinea, existencia_sistema)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      params: [tomaInventarioId, item.referencia, item.descripcion, item.unidad_medida, item.sublinea, item.existencia_sistema],
+      sql: `INSERT OR IGNORE INTO referencia_catalogo (toma_inventario_id, referencia, descripcion, unidad_medida, sublinea, existencia_sistema, cod_barras)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      params: [tomaInventarioId, item.referencia, item.descripcion, item.unidad_medida, item.sublinea, item.existencia_sistema, item.cod_barras || null],
     }));
     executeTransaction(queries);
     await persistDatabase();
@@ -238,6 +238,14 @@ export const ReferenciaCatalogoRepo = {
     );
   },
 
+  async searchByCodBarras(tomaInventarioId: number, codBarras: string): Promise<ReferenciaCatalogo | null> {
+    const results = executeQuery<ReferenciaCatalogo>(
+      `SELECT * FROM referencia_catalogo WHERE toma_inventario_id = ? AND cod_barras = ? LIMIT 1`,
+      [tomaInventarioId, codBarras]
+    );
+    return results[0] || null;
+  },
+
   async searchByDescription(tomaInventarioId: number, query: string, limit = 20): Promise<ReferenciaCatalogo[]> {
     // Split query into words for partial matching (e.g., "ADULT" matches "ADULTO")
     const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
@@ -255,21 +263,23 @@ export const ReferenciaCatalogoRepo = {
            OR descripcion LIKE ?
            OR descripcion LIKE ?
            OR descripcion LIKE ?
+           OR cod_barras LIKE ?
          )
          ORDER BY 
+           CASE WHEN cod_barras LIKE ? THEN 0 ELSE 1 END,
            CASE WHEN descripcion LIKE ? THEN 0 ELSE 1 END,
            CASE WHEN referencia LIKE ? THEN 0 ELSE 1 END,
            descripcion
          LIMIT ?`,
-        [tomaInventarioId, `${term}%`, `%${term}%`, `% ${term}%`, `%${term} %`, `% ${term} %`, `${term}%`, `${term}%`, limit]
+        [tomaInventarioId, `${term}%`, `%${term}%`, `% ${term}%`, `%${term} %`, `% ${term} %`, `${term}%`, `${term}%`, `${term}%`, limit]
       );
     }
     
     // Multiple words - ALL must match (AND logic)
-    const whereClauses = words.map(() => `(referencia LIKE ? OR descripcion LIKE ?)`).join(' AND ');
+    const whereClauses = words.map(() => `(referencia LIKE ? OR descripcion LIKE ? OR cod_barras LIKE ?)`).join(' AND ');
     const params: (string | number)[] = [tomaInventarioId];
     words.forEach(w => {
-      params.push(`%${w}%`, `%${w}%`);
+      params.push(`%${w}%`, `%${w}%`, `%${w}%`);
     });
     params.push(limit);
     
@@ -371,9 +381,9 @@ export const ConteoLineaRepo = {
 
   async bulkCreate(items: Omit<ConteoLinea, 'id' | 'created_at'>[]): Promise<void> {
     const queries = items.map((item) => ({
-      sql: `INSERT INTO conteo_linea (toma_inventario_id, posicion_id, referencia, cantidad, auxiliar_id, fecha_hora, origen)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      params: [item.toma_inventario_id, item.posicion_id, item.referencia, item.cantidad, item.auxiliar_id, item.fecha_hora, item.origen],
+      sql: `INSERT INTO conteo_linea (toma_inventario_id, posicion_id, referencia, cantidad, posiciones_ocupadas, posiciones_vacias, formula_text, auxiliar_id, fecha_hora, origen, cuerpo_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`,
+      params: [item.toma_inventario_id, item.posicion_id, item.referencia, item.cantidad, item.posiciones_ocupadas, item.posiciones_vacias, item.formula_text, item.auxiliar_id, item.origen, item.cuerpo_id || null],
     }));
     executeTransaction(queries);
     await persistDatabase();
@@ -706,6 +716,7 @@ export const ExcelRepo = {
                 'Cant. tránsito': Number(getVal(['Cant. tránsito', 'Cant. Tránsito', 'cant. tránsito', 'Cant. transito']) || 0),
                 'Peso en KIL': Number(getVal(['Peso en KIL', 'Peso en KIL', 'peso en kil', 'PESO EN KIL']) || 0),
                 Sublínea: String(getVal(['Sublínea', 'Sublinea', 'sublinea', 'SUBLINEA']) || '').trim(),
+                'Cod. Barras': String(getVal(['Cod. Barras', 'Cod. barras', 'cod. barras', 'Código Barras', 'Codigo Barras', 'Codigo de barras', 'Código de Barras', 'BARCODE', 'Barcode']) || '').trim() || undefined,
               };
             })
             .filter((r) => r.Referencia);

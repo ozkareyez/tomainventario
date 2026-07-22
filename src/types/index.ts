@@ -34,6 +34,7 @@ export interface ReferenciaCatalogo {
   unidad_medida: string;
   sublinea: string | null;
   existencia_sistema: number;
+  cod_barras: string | null;
   created_at: string;
 }
 
@@ -91,6 +92,7 @@ export interface ExcelRow {
   'Cant. tránsito': number;
   'Peso en KIL': number;
   Sublínea: string;
+  'Cod. Barras'?: string;
 }
 
 export interface ConteoPorReferencia {

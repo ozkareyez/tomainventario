@@ -107,7 +107,7 @@ function initializeSchema(db: Database): void {
       rack_id INTEGER NOT NULL,
       codigo TEXT NOT NULL,
       orden INTEGER NOT NULL DEFAULT 1,
-      total_posiciones INTEGER NOT NULL DEFAULT 5,
+      total_posiciones INTEGER NOT NULL DEFAULT 10,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (rack_id) REFERENCES rack(id) ON DELETE CASCADE,
       UNIQUE(rack_id, codigo)
@@ -121,6 +121,7 @@ function initializeSchema(db: Database): void {
       unidad_medida TEXT NOT NULL,
       sublinea TEXT,
       existencia_sistema INTEGER NOT NULL DEFAULT 0,
+      cod_barras TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (toma_inventario_id) REFERENCES toma_inventario(id) ON DELETE CASCADE,
       UNIQUE(toma_inventario_id, referencia)
@@ -166,11 +167,31 @@ function initializeSchema(db: Database): void {
 
   db.exec(schema);
   
-  // Add new columns to conteo_linea if not present (migration)
+  // Add new columns (migrations)
   try { db.run("ALTER TABLE conteo_linea ADD COLUMN posiciones_ocupadas INTEGER NOT NULL DEFAULT 1"); } catch {}
   try { db.run("ALTER TABLE conteo_linea ADD COLUMN posiciones_vacias INTEGER NOT NULL DEFAULT 0"); } catch {}
   try { db.run("ALTER TABLE conteo_linea ADD COLUMN formula_text TEXT NOT NULL DEFAULT ''"); } catch {}
   try { db.run("ALTER TABLE conteo_linea ADD COLUMN cuerpo_id INTEGER REFERENCES cuerpo(id)"); } catch {}
+  try { db.run("ALTER TABLE referencia_catalogo ADD COLUMN cod_barras TEXT"); } catch {}
+
+  // Migration: regenerate existing cuerpos from 5→10 positions
+  const oldCount = db.exec("SELECT COUNT(*) as cnt FROM cuerpo WHERE total_posiciones = 5");
+  if ((oldCount[0]?.values[0]?.[0] as number) > 0) {
+    const racksData = db.exec("SELECT id, nombre, num_posiciones FROM rack");
+    db.run("UPDATE conteo_linea SET cuerpo_id = NULL WHERE cuerpo_id IN (SELECT id FROM cuerpo WHERE total_posiciones = 5)");
+    db.run("DELETE FROM cuerpo WHERE total_posiciones = 5");
+    for (const row of racksData[0]?.values || []) {
+      const rackId = row[0] as number;
+      const nombre = row[1] as string;
+      const numPosiciones = row[2] as number;
+      const numCuerpos = Math.ceil(numPosiciones / 10);
+      const prefix = nombre.startsWith('Rack ') ? nombre.replace('Rack ', 'R') : nombre;
+      for (let i = 1; i <= numCuerpos; i++) {
+        const codigo = `${prefix}C${i}`;
+        db.run("INSERT OR IGNORE INTO cuerpo (rack_id, codigo, orden, total_posiciones) VALUES (?, ?, ?, 10)", [rackId, codigo, i]);
+      }
+    }
+  }
 }
 
 export function getDatabase(): Database | null {

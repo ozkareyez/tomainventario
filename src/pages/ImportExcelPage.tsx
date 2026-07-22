@@ -79,6 +79,7 @@ export function ImportExcelPage() {
         unidad_medida: row['U.M.'],
         sublinea: row.Sublínea,
         existencia_sistema: row.Existencia,
+        cod_barras: row['Cod. Barras'] || null,
       }));
 
       const result = await ReferenciaCatalogoRepo.bulkCreate(tomaId, items);
