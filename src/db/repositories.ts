@@ -716,7 +716,7 @@ export const ExcelRepo = {
                 'Cant. tránsito': Number(getVal(['Cant. tránsito', 'Cant. Tránsito', 'cant. tránsito', 'Cant. transito']) || 0),
                 'Peso en KIL': Number(getVal(['Peso en KIL', 'Peso en KIL', 'peso en kil', 'PESO EN KIL']) || 0),
                 Sublínea: String(getVal(['Sublínea', 'Sublinea', 'sublinea', 'SUBLINEA']) || '').trim(),
-                'Cod. Barras': String(getVal(['Cod. Barras', 'Cod. barras', 'cod. barras', 'Código Barras', 'Codigo Barras', 'Codigo de barras', 'Código de Barras', 'BARCODE', 'Barcode']) || '').trim() || undefined,
+                'Cod. Barras': String(getVal(['Cod. Barras', 'Cod. barras', 'cod. barras', 'Código Barras', 'Codigo Barras', 'Codigo de barras', 'Código de Barras', 'BARCODE', 'Barcode', 'Código', 'Codigo', 'Cod', 'COD']) || '').trim() || undefined,
               };
             })
             .filter((r) => r.Referencia);

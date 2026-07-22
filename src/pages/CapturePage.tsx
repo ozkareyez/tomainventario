@@ -85,6 +85,7 @@ export function CapturePage() {
       if (searchDebounceRef.current) {
         clearTimeout(searchDebounceRef.current);
       }
+      stopScan();
     };
   }, []);
 
@@ -301,6 +302,7 @@ export function CapturePage() {
       scanStreamRef.current = stream;
       scanningRef.current = true;
       setIsScanning(true);
+      if (scanRef.current) scanRef.current.srcObject = stream;
 
       const detectLoop = async () => {
         if (!scanningRef.current) return;
