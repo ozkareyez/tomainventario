@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Warehouse, Plus, Eye, Trash2, Upload, Download,
-  Loader2, Filter, User, Clock, Package, Save, X, Camera
+  Loader2, Filter, User, Clock, Package, Save, X, ScanLine
 } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -85,7 +86,6 @@ export function CapturePage() {
       if (searchDebounceRef.current) {
         clearTimeout(searchDebounceRef.current);
       }
-      stopScan();
     };
   }, []);
 
@@ -160,24 +160,29 @@ export function CapturePage() {
     setSearchQuery(query);
     setHighlightedIndex(-1);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    
+
     searchDebounceRef.current = setTimeout(async () => {
       if (query.length >= 1 && currentTomaId) {
         const results = await ReferenciaCatalogoRepo.searchByDescription(currentTomaId, query);
         setFilteredReferencias(results);
         setShowProductDialog(false);
+        if (results.length === 1 && results[0].referencia === query) {
+          handleReferenciaSelect(results[0]);
+        }
       } else {
         setFilteredReferencias([]);
       }
-    }, 150);
+    }, 100);
   }, [currentTomaId, setSearchQuery]);
 
   const handleReferenciaSelect = (ref: ReferenciaCatalogo) => {
     setReferenciaInput(ref.referencia);
     setShowProductDialog(false);
+    setFilteredReferencias([]);
     setPosicionesOcupadas('');
     setUnidadesPorPosicion('');
     setPosicionesVacias(0);
+    setTimeout(() => posicionesRef.current?.focus(), 50);
   };
 
   const handleAddPending = () => {
@@ -225,7 +230,7 @@ export function CapturePage() {
     setPosicionesVacias(0);
     setReferenciaInput('');
     setFilteredReferencias([]);
-    setTimeout(() => referenciaInputRef.current?.focus(), 100);
+    setTimeout(() => referenciaInputRef.current?.focus(), 50);
   };
 
   const handleSaveAll = async () => {
@@ -279,58 +284,49 @@ export function CapturePage() {
     setPendingConteos(prev => prev.filter(p => p.tempId !== tempId));
   };
 
-  const [isScanning, setIsScanning] = useState(false);
-  const scanningRef = useRef(false);
-  const scanRef = useRef<HTMLVideoElement>(null);
-  const scanStreamRef = useRef<MediaStream | null>(null);
+  const posicionesRef = useRef<HTMLInputElement>(null);
+  const udsRef = useRef<HTMLInputElement>(null);
 
-  const stopScan = () => {
-    scanningRef.current = false;
-    if (scanStreamRef.current) {
-      scanStreamRef.current.getTracks().forEach(t => t.stop());
-      scanStreamRef.current = null;
-    }
-    setIsScanning(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleOpenScanner = async () => {
+    if (!currentTomaId) return;
+    setShowScanner(true);
+    setTimeout(async () => {
+      if (!scannerContainerRef.current) return;
+      try {
+        const html5QrCode = new Html5Qrcode('scanner-container');
+        scannerRef.current = html5QrCode;
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 15, qrbox: { width: 250, height: 150 } },
+          async (decodedText) => {
+            await html5QrCode.stop();
+            scannerRef.current = null;
+            setShowScanner(false);
+            const ref = await ReferenciaCatalogoRepo.searchByCodBarras(currentTomaId, decodedText);
+            if (ref) {
+              handleReferenciaSelect(ref);
+              toast({ title: 'Escaneado', description: `${ref.referencia} - ${ref.descripcion}`, variant: 'success' });
+            } else {
+              toast({ title: 'No encontrado', description: `Código ${decodedText} no está en el catálogo`, variant: 'destructive' });
+            }
+          },
+          () => {}
+        );
+      } catch {
+        toast({ title: 'Error de cámara', description: 'No se pudo acceder a la cámara', variant: 'destructive' });
+        setShowScanner(false);
+      }
+    }, 100);
   };
 
-  const handleScanBarcode = async () => {
-    if (!currentTomaId) return;
-    if (isScanning) { stopScan(); return; }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      scanStreamRef.current = stream;
-      scanningRef.current = true;
-      setIsScanning(true);
-      if (scanRef.current) scanRef.current.srcObject = stream;
-
-      const detectLoop = async () => {
-        if (!scanningRef.current) return;
-        try {
-          const detector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] });
-          const video = scanRef.current;
-          if (!video || !video.videoWidth) { setTimeout(detectLoop, 500); return; }
-          const barcodes = await detector.detect(video);
-          for (const b of barcodes) {
-            if (b.rawValue) {
-              stopScan();
-              const ref = await ReferenciaCatalogoRepo.searchByCodBarras(currentTomaId, b.rawValue);
-              if (ref) {
-                handleReferenciaSelect(ref);
-                toast({ title: 'Escaneado', description: `${ref.referencia} - ${ref.descripcion}`, variant: 'success' });
-              } else {
-                toast({ title: 'No encontrado', description: `Código ${b.rawValue} no está en el catálogo`, variant: 'destructive' });
-              }
-              return;
-            }
-          }
-          setTimeout(detectLoop, 500);
-        } catch { setTimeout(detectLoop, 500); }
-      };
-      detectLoop();
-    } catch {
-      toast({ title: 'Error de cámara', description: 'No se pudo acceder a la cámara', variant: 'destructive' });
-    }
+  const handleCloseScanner = async () => {
+    try { await scannerRef.current?.stop(); } catch {}
+    scannerRef.current = null;
+    setShowScanner(false);
   };
 
   const handleDeleteConteo = async (conteoId: number) => {
@@ -532,14 +528,15 @@ export function CapturePage() {
                         Buscar
                       </Button>
                       <Button
-                        variant={isScanning ? 'default' : 'outline'}
+                        variant="outline"
                         size="sm"
-                        onClick={handleScanBarcode}
+                        onClick={handleOpenScanner}
                         title="Escanear código de barras"
                         className="shrink-0 h-9 sm:h-10 text-xs sm:text-sm"
                       >
-                        {isScanning ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                        <ScanLine className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </Button>
+
                     </div>
                     {filteredReferencias.length > 0 && !showProductDialog && (
                       <div className="mt-1 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto bg-white shadow-sm">
@@ -569,20 +566,7 @@ export function CapturePage() {
                     )}
                   </div>
 
-                  {isScanning && (
-                    <div className="relative rounded-lg overflow-hidden border border-primary bg-black">
-                      <video ref={scanRef} autoPlay playsInline muted className="w-full h-32 sm:h-40 object-cover" />
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-3/4 h-1/2 border-2 border-primary rounded-lg opacity-60" />
-                      </div>
-                      <button onClick={stopScan} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1">
-                        <X className="h-4 w-4" />
-                      </button>
-                      <p className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-white bg-black/50 px-2 py-0.5 rounded">
-                        Escaneando...
-                      </p>
-                    </div>
-                  )}
+
 
                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                     <div>
@@ -615,6 +599,7 @@ export function CapturePage() {
                       label="Posiciones"
                       placeholder="0"
                       value={posicionesOcupadas}
+                      ref={posicionesRef}
                       onChange={(e) => {
                         const val = e.target.value.replace(/[^0-9]/g, '');
                         setPosicionesOcupadas(val);
@@ -622,7 +607,7 @@ export function CapturePage() {
                         const total = selectedCuerpo?.total_posiciones || 10;
                         setPosicionesVacias(Math.max(0, total - n));
                       }}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddPending()}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); udsRef.current?.focus(); } }}
                       inputMode="numeric"
                       className="text-sm h-9 sm:h-10"
                     />
@@ -630,11 +615,12 @@ export function CapturePage() {
                       label="Uds/pos"
                       placeholder="0"
                       value={unidadesPorPosicion}
+                      ref={udsRef}
                       onChange={(e) => {
                         const val = e.target.value.replace(/[^0-9]/g, '');
                         setUnidadesPorPosicion(val);
                       }}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddPending()}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPending(); } }}
                       inputMode="numeric"
                       className="text-sm h-9 sm:h-10"
                     />
@@ -705,6 +691,25 @@ export function CapturePage() {
                     ))}
                   </div>
                 )}
+
+                <Dialog open={showScanner} onOpenChange={(open) => { if (!open) handleCloseScanner(); }}>
+                  <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <ScanLine className="h-5 w-5" />
+                        Escanear código de barras
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div
+                      id="scanner-container"
+                      ref={scannerContainerRef}
+                      className="w-full aspect-[4/3] bg-gray-900 rounded-lg overflow-hidden"
+                    />
+                    <DialogFooter>
+                      <Button variant="outline" onClick={handleCloseScanner} className="w-full">Cancelar</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
                 {showProductDialog && filteredReferencias.length > 0 && (
                   <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
