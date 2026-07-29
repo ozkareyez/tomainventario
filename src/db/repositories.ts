@@ -716,7 +716,20 @@ export const ExcelRepo = {
                 'Cant. tránsito': Number(getVal(['Cant. tránsito', 'Cant. Tránsito', 'cant. tránsito', 'Cant. transito']) || 0),
                 'Peso en KIL': Number(getVal(['Peso en KIL', 'Peso en KIL', 'peso en kil', 'PESO EN KIL']) || 0),
                 Sublínea: String(getVal(['Sublínea', 'Sublinea', 'sublinea', 'SUBLINEA']) || '').trim(),
-                'Cod. Barras': String(getVal(['Cod. Barras', 'Cod. barras', 'cod. barras', 'Código Barras', 'Codigo Barras', 'Codigo de barras', 'Código de Barras', 'BARCODE', 'Barcode', 'Código', 'Codigo', 'Cod', 'COD']) || '').trim() || undefined,
+                'Cod. Barras': (() => {
+                  const raw = getVal(['Cod. Barras', 'Cod. barras', 'cod. barras', 'Código de barras', 'Código Barras', 'Código de Barras', 'Codigo Barras', 'Codigo de barras', 'Codigo de Barra', 'BARCODE', 'Barcode', 'Código', 'Codigo', 'Cod', 'COD']);
+                  if (raw == null || raw === '') return undefined;
+                  if (typeof raw === 'number') return String(Math.round(raw));
+                  const str = String(raw).trim();
+                  if (!str) return undefined;
+                  const normalized = str.replace(',', '.');
+                  if (/^[\d.]+E[+-]?\d+$/i.test(normalized)) {
+                    const num = Number(normalized);
+                    if (!isNaN(num) && isFinite(num) && num > 0) return String(Math.round(num));
+                  }
+                  const digits = str.replace(/[^\d]/g, '');
+                  return digits || str;
+                })(),
               };
             })
             .filter((r) => r.Referencia);
