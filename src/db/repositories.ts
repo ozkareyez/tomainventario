@@ -247,35 +247,27 @@ export const ReferenciaCatalogoRepo = {
   },
 
   async searchByDescription(tomaInventarioId: number, query: string, limit = 20): Promise<ReferenciaCatalogo[]> {
-    // Split query into words for partial matching (e.g., "ADULT" matches "ADULTO")
-    const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
+    const words = query.trim().split(/\s+/).filter(w => w.length >= 1);
     
     if (words.length === 0) return [];
     
     if (words.length === 1) {
-      // Single word - match prefix, contains, and word boundaries
       const term = words[0];
       return executeQuery<ReferenciaCatalogo>(
         `SELECT * FROM referencia_catalogo 
          WHERE toma_inventario_id = ? AND (
            referencia LIKE ? 
-           OR descripcion LIKE ? 
-           OR descripcion LIKE ?
-           OR descripcion LIKE ?
            OR descripcion LIKE ?
            OR cod_barras LIKE ?
          )
          ORDER BY 
-           CASE WHEN cod_barras LIKE ? THEN 0 ELSE 1 END,
-           CASE WHEN descripcion LIKE ? THEN 0 ELSE 1 END,
            CASE WHEN referencia LIKE ? THEN 0 ELSE 1 END,
            descripcion
          LIMIT ?`,
-        [tomaInventarioId, `${term}%`, `%${term}%`, `% ${term}%`, `%${term} %`, `% ${term} %`, `${term}%`, `${term}%`, `${term}%`, limit]
+        [tomaInventarioId, `${term}%`, `%${term}%`, `${term}%`, `${term}%`, limit]
       );
     }
     
-    // Multiple words - ALL must match (AND logic)
     const whereClauses = words.map(() => `(referencia LIKE ? OR descripcion LIKE ? OR cod_barras LIKE ?)`).join(' AND ');
     const params: (string | number)[] = [tomaInventarioId];
     words.forEach(w => {
@@ -290,6 +282,12 @@ export const ReferenciaCatalogoRepo = {
        LIMIT ?`,
       params
     );
+  },
+
+  async searchCombined(tomaInventarioId: number, query: string, limit = 20): Promise<ReferenciaCatalogo[]> {
+    const results = await this.searchByDescription(tomaInventarioId, query, limit);
+    if (results.length > 0) return results;
+    return this.search(tomaInventarioId, query, limit);
   },
 
   async getByReferencia(tomaInventarioId: number, referencia: string): Promise<ReferenciaCatalogo | null> {

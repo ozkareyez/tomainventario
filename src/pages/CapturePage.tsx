@@ -163,7 +163,7 @@ export function CapturePage() {
 
     searchDebounceRef.current = setTimeout(async () => {
       if (query.length >= 1 && currentTomaId) {
-        const results = await ReferenciaCatalogoRepo.searchByDescription(currentTomaId, query);
+        const results = await ReferenciaCatalogoRepo.searchCombined(currentTomaId, query);
         setFilteredReferencias(results);
         setShowProductDialog(false);
         if (results.length === 1 && results[0].referencia === query) {
@@ -563,6 +563,9 @@ export function CapturePage() {
                           </button>
                         )}
                       </div>
+                    )}
+                    {referenciaInput.length >= 1 && filteredReferencias.length === 0 && !showProductDialog && (
+                      <p className="text-xs text-gray-400 mt-1">Sin resultados para &quot;{referenciaInput}&quot;</p>
                     )}
                   </div>
 
