@@ -301,17 +301,19 @@ export function CapturePage() {
         scannerRef.current = html5QrCode;
         await html5QrCode.start(
           { facingMode: 'environment' },
-          { fps: 15, qrbox: { width: 250, height: 150 } },
+          { fps: 10, qrbox: { width: 280, height: 180 } },
           async (decodedText) => {
+            const code = decodedText.trim();
+            if (!/^\d{8,14}$/.test(code)) return;
             await html5QrCode.stop();
             scannerRef.current = null;
             setShowScanner(false);
-            const ref = await ReferenciaCatalogoRepo.searchByCodBarras(currentTomaId, decodedText);
+            const ref = await ReferenciaCatalogoRepo.searchByCodBarras(currentTomaId, code);
             if (ref) {
               handleReferenciaSelect(ref);
               toast({ title: 'Escaneado', description: `${ref.referencia} - ${ref.descripcion}`, variant: 'success' });
             } else {
-              toast({ title: 'No encontrado', description: `Código ${decodedText} no está en el catálogo`, variant: 'destructive' });
+              toast({ title: 'No encontrado', description: `Código ${code} no está en el catálogo`, variant: 'destructive' });
             }
           },
           () => {}
