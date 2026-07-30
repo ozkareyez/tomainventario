@@ -295,12 +295,21 @@ export function CapturePage() {
     if (!currentTomaId) return;
     setShowScanner(true);
     setTimeout(async () => {
-      if (!scannerContainerRef.current) return;
+      const container = scannerContainerRef.current;
+      if (!container) {
+        setShowScanner(false);
+        return;
+      }
+      if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+        toast({ title: 'Error', description: 'El contenedor de la cámara no está visible', variant: 'destructive' });
+        setShowScanner(false);
+        return;
+      }
       try {
         const html5QrCode = new Html5Qrcode('scanner-container');
         scannerRef.current = html5QrCode;
         await html5QrCode.start(
-          { facingMode: 'environment' },
+          { facingMode: { ideal: 'environment' } },
           { fps: 15, qrbox: { width: 250, height: 150 } },
           async (decodedText) => {
             await html5QrCode.stop();
@@ -320,7 +329,7 @@ export function CapturePage() {
         toast({ title: 'Error de cámara', description: 'No se pudo acceder a la cámara', variant: 'destructive' });
         setShowScanner(false);
       }
-    }, 100);
+    }, 500);
   };
 
   const handleCloseScanner = async () => {
